@@ -1,0 +1,166 @@
+---
+Name: "Nelson Huang"
+title: "Final Project"
+output: html_notebook
+---
+
+```{r}
+rm(list = ls())
+
+library(DataComputing)
+library(dplyr)
+library(lubridate)
+library(mosaic)
+library(tidyverse)
+library(party)
+```
+
+
+## Purpose
+**The purpose of this project is to observe the median salaries and salary percentiles for each major in various colleges, as well as other variables, in order to understand the overall cost and benefits of a college degree and how one can get the most of our education.  **
+
+
+### Data Access
+
+## Imported Data
+```{r}
+degrees_that_pay_back <- read.csv(file = file.choose(), stringsAsFactors = F)
+salaries_by_college_type <- read.csv(file = file.choose(), stringsAsFactors = F)
+salaries_by_region <- read.csv(file = file.choose(), stringsAsFactors = F)
+```
+
+## Data Intake
+```{r}
+degrees_that_pay_back %>%
+  head(20)
+
+salaries_by_college_type %>%
+  head(20)
+
+salaries_by_region %>%
+  head(20)
+```
+
+
+### Data Wrangling
+
+We want to check which major produces the highest starting median salary from increasing order. This can be a good starting point to give us an idea of whether a major is well-paid or not.
+```{r}
+highest_starting_salary <-
+  degrees_that_pay_back %>%
+    group_by(Undergraduate.Major) %>%
+    summarise(salary = Starting.Median.Salary) %>%
+    arrange(desc(salary))
+
+highest_starting_salary
+```
+Our findings showed that the 'Physician Assistant' major contributes to the highest starting median salary. In addition, it's also worth noting that the next 7 majors with the highest starting median salary are all related to Engineering. 
+
+
+It's interesting to see which majors contribute to the highest starting median salary. But, would the major actually contributes to salary increases throughout a person's career? 
+```{r}
+highest_salary_increases <-
+  degrees_that_pay_back %>%
+    group_by(Undergraduate.Major) %>%
+  
+    summarise(difference = as.numeric(gsub('\\$|,', '', Mid.Career.Median.Salary)) - as.numeric(gsub('\\$|,', '', Starting.Median.Salary))) %>%
+  
+    spread(key = Undergraduate.Major, value = difference, fill=0) 
+
+highest_salary_increases
+```
+Based on our findings, it seems like a major in Econimcs would produce the greatest salary increases with a total of $48,500, compared to the other majors. It's also noticeable that Engineering majors are in the top 7 of this list. 
+
+
+So far, majors that are related to engineering show up in our previous findings. We want to look closely at this major and see if there are other indications that may suggest the idea that an engineering degree would contribute greatly to a person's salary.
+```{r}
+engineering_salaries <-
+  salaries_by_college_type %>%
+    filter(grepl("Engineering", School.Type, ignore.case = TRUE)) %>%
+    select(School.Name, Starting.Median.Salary, Mid.Career.Median.Salary)
+
+engineering_salaries
+```
+Here, we use the 'salaries_by_college_type' data set and we filtered out all of the schools that are not an 'Engineering' type. While observing the starting and mid-career median salaries, it's astonishing by how much money a person can earn if they're a part of an engineering major or school.
+
+
+Knowing that engineering majors generally produces more income for a person, one last thing that comes to mind is whether a college degree is even worth it.
+```{r}
+majors_with_lowest_salary <-
+  degrees_that_pay_back %>%
+    summarise(min(Starting.Median.Salary), max(Starting.Median.Salary))
+
+majors_with_lowest_salary
+```
+It turns out that students generally earn between $34,000 - $75,000 once they graduate. One may question if whether or not this is worth it, given the amount of money a student has to pay in order to get his or her degree. We believe that there may be other factors involved that determines if a college degree is worth it or not.
+
+
+Since engineering majors contribute the most to our salaries, We decided to look a bit deeper in our data and see if we can maximize our opportunity to make more money with our education.
+```{r}
+school_names <-
+  salaries_by_college_type %>%
+  select(School.Name, School.Type)
+
+joined <-
+  school_names %>%
+  select(School.Name, School.Type) %>%
+  left_join(salaries_by_region %>% select(School.Name, Region, Starting.Median.Salary),
+            by = c("School.Name" = "School.Name"))
+
+final_data <-
+  joined %>%
+    filter(School.Type == "Engineering") %>%
+    group_by(School.Type, Region) %>%
+    summarise(total=n())
+
+final_data
+```
+It turns out that most of the engineering schools in the United States are located in the Northeastern region. Engineering schools are heavily present in this area. A prospective engineering student may want to look at schools in those area to get the most opportunities, so they can make more money in the future with his/her engineering degree.
+
+
+### Data Visualization
+
+```{r}
+highest_starting_salary %>%
+  head(10) %>%
+  ggplot(aes(x = reorder(Undergraduate.Major, desc(salary)), y = salary, group=1)) +
+  xlab("Majors") +
+  geom_bar(colour="red",stat='identity', alpha = 0.75, width=.9) + 
+  geom_point() + geom_line(color="blue") +
+  theme(axis.text.x = element_text(angle = 90, hjust =1, vjust = 0.5))
+
+```
+A bar chart of the top 10 majors and their starting salaries.
+
+
+```{r}
+joined %>%
+  mutate(median = as.numeric(gsub('\\$|,', '', Starting.Median.Salary))/10000) %>%
+  ggplot(aes(y=median,x=School.Type))+
+  geom_point() +
+  facet_wrap(~ Region) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  coord_cartesian(ylim=c(3, 9)) + 
+  ylab("Median Starting Salary (in ten thousands)") + xlab("Type of School")
+
+```
+A faceted bar chart displaying the Type of School and Median Starting Salary for each regions/states in the United States.
+
+
+```{r}
+difference <-
+  degrees_that_pay_back %>%
+    group_by(Undergraduate.Major) %>%
+    summarise(difference = as.numeric(gsub('\\$|,', '', Mid.Career.Median.Salary)) - as.numeric(gsub('\\$|,', '', Starting.Median.Salary)))
+
+difference %>%
+  ggplot(aes(x = Undergraduate.Major, y = difference, group=2)) +
+  stat_smooth(method=lm) +
+  geom_point() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+  geom_line(color="red") +
+  ylim(10000, 50000) +
+  ylab("Increase in Salary") + xlab("Majors")
+
+```
+A line graph with a smoother line that shows the list of majors and their increase in salary (from starting salary to mid-career salary). 
